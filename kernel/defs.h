@@ -167,6 +167,23 @@ pagetable_t     uvmcreate(void);
 void            uvminit(pagetable_t, uchar *, uint);
 uint64          uvmalloc(pagetable_t, uint64, uint64);
 uint64          uvmdealloc(pagetable_t, uint64, uint64);
+int             copyin(pagetable_t, char *, uint64, uint64);
+int             copyinstr(pagetable_t, char *, uint64, uint64);
+void            vmprint(pagetable_t);
+// lab3-1
+void vmprint(pagetable_t);
+// 初始化kernel页表 lab3-2
+pagetable_t _kvminit();
+// 映射
+void _kvmmap(pagetable_t, uint64, uint64, uint64, int);
+// vm.c的walk函数
+pte_t* walk(pagetable_t, uint64, int);
+// lab3-3
+int copyin_new(pagetable_t, char*, uint64, uint64);
+int copyinstr_new(pagetable_t, char*, uint64, uint64);
+void uvm2kvm(pagetable_t, pagetable_t, uint64, uint64);
+
+
 #ifdef SOL_COW
 #else
 int             uvmcopy(pagetable_t, pagetable_t, uint64);
