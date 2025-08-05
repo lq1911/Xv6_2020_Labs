@@ -70,6 +70,10 @@ sys_sleep(void)
     sleep(&ticks, &tickslock);
   }
   release(&tickslock);
+  
+  // lab4-2
+  backtrace();
+
   return 0;
 }
 
@@ -94,4 +98,32 @@ sys_uptime(void)
   xticks = ticks;
   release(&tickslock);
   return xticks;
+}
+
+uint64 sys_sigalarm(void) {
+  int interval;
+  uint64 handler;
+  struct proc* p = myproc();
+  // 错误检查
+  if (argint(0, &interval) < 0 || argaddr(1, &handler) < 0 || interval < 0)
+    return -1;
+  // 赋值
+  p->interval = interval;
+  p->handler = handler;
+  p->passtick = 0;
+  return 0;
+}
+
+// lab4-3
+uint64 sys_sigreturn(void) {
+  struct proc* p = myproc();
+  // 判断地址是否正确
+  if (p->sigframe != p->trapframe + 512)
+    return -1;
+  memmove(p->trapframe, p->sigframe, sizeof(struct trapframe));
+  // 重置
+  p->passtick = 0;
+  p->sigframe = 0;
+  p->sigflag = 0;
+  return 0;
 }
