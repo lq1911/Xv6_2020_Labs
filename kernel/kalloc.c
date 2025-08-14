@@ -81,17 +81,18 @@ kalloc(void)
   return (void*)r;
 }
 
+// 返回当前可用内存空间大小
 uint64
 free_mem(void)
 {
-	struct run *r;
-	uint64 num=0;
+	struct run* p;
+	uint64 ans = 0;
 	acquire(&kmem.lock);
-	r=kmem.freelist;
-	while(r){
-		num++;
-		r=r->next;
+	p = kmem.freelist;
+	while (p) {
+		++ans;
+		p = p->next;
 	}
 	release(&kmem.lock);
-	return num *PGSIZE;
+	return ans * PGSIZE;
 }

@@ -92,6 +92,10 @@ struct proc {
   void *chan;                  // If non-zero, sleeping on chan
   int killed;                  // If non-zero, have been killed
   int xstate;                  // Exit status to be returned to parent's wait
+  // ---------------------------
+  // trace需要的变量
+  int trace_mask;
+  //-----------------------------
   int pid;                     // Process ID
 
   // these are private to the process, so p->lock need not be held.
@@ -103,5 +107,4 @@ struct proc {
   struct file *ofile[NOFILE];  // Open files
   struct inode *cwd;           // Current directory
   char name[16];               // Process name (debugging)
-  int tracemask;
 };

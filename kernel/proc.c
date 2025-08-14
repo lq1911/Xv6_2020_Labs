@@ -266,6 +266,8 @@ fork(void)
   if((np = allocproc()) == 0){
     return -1;
   }
+  // 继承父进程的mask
+  np->trace_mask = p->trace_mask;
 
   // Copy user memory from parent to child.
   if(uvmcopy(p->pagetable, np->pagetable, p->sz) < 0){
@@ -279,8 +281,6 @@ fork(void)
 
   // copy saved user registers.
   *(np->trapframe) = *(p->trapframe);
-
-  np->tracemask=p->tracemask;
 
   // Cause fork to return 0 in the child.
   np->trapframe->a0 = 0;
@@ -696,20 +696,18 @@ procdump(void)
   }
 }
 
+// 获取当前可用的进程数目
 uint64
 nproc(void)
 {
-	struct proc *p;
-	uint64 num = 0;
-
-	for(p=proc; p < &proc[NPROC]; p++)
-	{
+	struct proc* p;
+	uint64 ans = 0;
+	for (p = proc; p < &proc[NPROC]; ++p) {
+		// 加锁
 		acquire(&p->lock);
-		if(p->state != UNUSED)
-		{
-			num++;
-		}
+		if (p->state != UNUSED)
+			++ans;
 		release(&p->lock);
 	}
-	return num;
+	return ans;
 }

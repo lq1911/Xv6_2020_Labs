@@ -100,11 +100,12 @@ sys_uptime(void)
 uint64
 sys_trace(void)
 {
-	int mask;
-	if(argint(0,&mask) < 0)
-			return -1;
-
-	myproc()->tracemask = mask;
+	int n;
+	// 获取追踪的mask 取a0寄存器的值给mask
+	if (argint(0, &n) < 0)
+		return -1;
+	// 将mask保存在本地进程的proc中
+	myproc()->trace_mask = n;
 	return 0;
 }
 
@@ -113,14 +114,13 @@ sys_sysinfo(void)
 {
 	uint64 addr;
 	struct sysinfo info;
-	struct proc *p=myproc();
+	struct proc* p = myproc();
 
-	if(argaddr(0,&addr)<0)
+	if (argaddr(0, &addr) < 0)
 		return -1;
-
-	info.freemem=free_mem();
-	info.nproc=nproc();
-	if(copyout(p->pagetable, addr, (char *)&info, sizeof(info)) < 0)
+	info.freemem = free_mem();
+	info.nproc = nproc();
+	if (copyout(p->pagetable, addr, (char*)&info, sizeof(info)) < 0)
 		return -1;
 	return 0;
 }
