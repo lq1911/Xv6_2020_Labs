@@ -41,7 +41,7 @@ procinit(void)
       // kvmmap(va, (uint64)pa, PGSIZE, PTE_R | PTE_W);
       // p->kstack = va;
   }
-  kvminithart();
+  //kvminithart();
 }
 
 // Must be called with interrupts disabled,
@@ -113,6 +113,19 @@ found:
     return 0;
   }
 
+  //creat a kernel page table and dispatch a kernel stack
+  if((p->kernel_pagetable = mod_kvminit()) == 0){
+  	freeproc(p);
+	  release(&p->lock);
+	  return 0;
+  }
+
+  char *pa = kalloc();
+  if(pa == 0) panic("allocpron:kalloc\n");
+  uint64 va = KSTACK((int) (p - proc));
+  mod_kvmmap(p->kernel_pagetable, va, (uint64)pa, PGSIZE, PTE_R | PTE_W);
+  p->kstack = va;
+
   // An empty user page table.
   p->pagetable = proc_pagetable(p);
   if(p->pagetable == 0){
@@ -120,22 +133,6 @@ found:
     release(&p->lock);
     return 0;
   }
-
-  // 增加内核页表 lab3-2
-  p->kpagetable = _kvminit();
-  if (p->kpagetable == 0) {
-    freeproc(p);
-    release(&p->lock);
-    return 0;
-  }
-
-  // 在此处初始化内核页表 lab3-2
-  char* pa = kalloc();
-  if (pa == 0)
-    panic("kalloc");
-  uint64 va = KSTACK((int)(p - proc));
-  _kvmmap(p->kpagetable, va, (uint64)pa, PGSIZE, PTE_R | PTE_W);
-  p->kstack = va;
 
   // Set up new context to start executing at forkret,
   // which returns to user space.
@@ -146,49 +143,26 @@ found:
   return p;
 }
 
-// 释放内核页表辅助递归函数 lab3-2
-void proc_freekpagetable(pagetable_t kpagetable) {
-  for (int i = 0; i < 512; ++i) {
-    pte_t pte = kpagetable[i];
-    if ((pte & PTE_V) && (pte & (PTE_R | PTE_W | PTE_X)) == 0) {
-      uint64 child = PTE2PA(pte);
-      proc_freekpagetable((pagetable_t)child);
-      kpagetable[i] = 0;
-    }
-  }
-  kfree((void*)kpagetable);
-}
-
-
 // free a proc structure and the data hanging from it,
 // including user pages.
 // p->lock must be held.
 static void
 freeproc(struct proc *p)
 {
- 
   if(p->trapframe)
     kfree((void*)p->trapframe);
   p->trapframe = 0;
- 
- // 释放内核栈 lab3-2
-  if (p->kstack) {
-    pte_t* pte = walk(p->kpagetable, p->kstack, 0);
-    if (pte == 0)
-      panic("freeproc: kstack");
-    kfree((void*)PTE2PA(*pte));
-  }
-  p->kstack = 0;
-
   if(p->pagetable)
     proc_freepagetable(p->pagetable, p->sz);
+
+  if(p->kstack)
+	  uvmunmap(p->kernel_pagetable, p->kstack, 1, 1);
+  p->kstack = 0;
+  if(p->kernel_pagetable)
+	  kvmfree(p->kernel_pagetable);
+  p->kernel_pagetable = 0;
+
   p->pagetable = 0;
-
-  // 释放内核页表 lab3-2
-  if (p->kpagetable)
-    proc_freekpagetable(p->kpagetable);
-  p->kpagetable = 0;
-
   p->sz = 0;
   p->pid = 0;
   p->parent = 0;
@@ -198,7 +172,6 @@ freeproc(struct proc *p)
   p->xstate = 0;
   p->state = UNUSED;
 }
-
 
 // Create a user page table for a given process,
 // with no user memory, but with trampoline pages.
@@ -268,9 +241,7 @@ userinit(void)
   // and data into it.
   uvminit(p->pagetable, initcode, sizeof(initcode));
   p->sz = PGSIZE;
-
-  // lab3-3
-  uvm2kvm(p->pagetable, p->kpagetable, 0, p->sz);
+  uvm2k(p->pagetable, p->kernel_pagetable, 0, p->sz);
 
   // prepare for the very first "return" from kernel to user.
   p->trapframe->epc = 0;      // user program counter
@@ -297,13 +268,15 @@ growproc(int n)
     if((sz = uvmalloc(p->pagetable, sz, sz + n)) == 0) {
       return -1;
     }
+    if (uvm2k(p->pagetable, p->kernel_pagetable, sz-n, sz) < 0) {
+		  return -1;
+    }
   } else if(n < 0){
     sz = uvmdealloc(p->pagetable, sz, sz + n);
+    if (n >= PGSIZE) {  // 我不知道为什么这样 if，反正不写会 panic
+		  uvmunmap(p->kernel_pagetable, PGROUNDUP(sz), n/PGSIZE, 0);
+	  }
   }
-
-  // lab3-3
-  uvm2kvm(p->pagetable, p->kpagetable, sz - n, sz);
-
   p->sz = sz;
   return 0;
 }
@@ -329,9 +302,6 @@ fork(void)
     return -1;
   }
   np->sz = p->sz;
-  
-  // lab3-3
-  uvm2kvm(np->pagetable, np->kpagetable, 0, np->sz);
 
   np->parent = p;
 
@@ -346,6 +316,9 @@ fork(void)
     if(p->ofile[i])
       np->ofile[i] = filedup(p->ofile[i]);
   np->cwd = idup(p->cwd);
+
+  if (uvm2k(np->pagetable, np->kernel_pagetable, 0, np->sz) < 0)
+	  return -1;
 
   safestrcpy(np->name, p->name, sizeof(p->name));
 
@@ -532,18 +505,18 @@ scheduler(void)
         p->state = RUNNING;
         c->proc = p;
 
-	// lab3-2
-	w_satp(MAKE_SATP(p->kpagetable));
-	sfence_vma();
+        w_satp(MAKE_SATP(p->kernel_pagetable)); 
+		    sfence_vma(); 
 
         swtch(&c->context, &p->context);
 
-	// lab3-2
-	kvminithart();
+        // use kernel_pagetable when no process is running.
+        kvminithart();
 
         // Process is done running for now.
         // It should have changed its p->state before coming back.
         c->proc = 0;
+
 
         found = 1;
       }
@@ -763,3 +736,4 @@ procdump(void)
     printf("\n");
   }
 }
+

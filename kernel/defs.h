@@ -162,28 +162,13 @@ void            kvminit(void);
 void            kvminithart(void);
 uint64          kvmpa(uint64);
 void            kvmmap(uint64, uint64, uint64, int);
+pagetable_t     mod_kvminit(void);
+void            mod_kvmmap(pagetable_t, uint64, uint64, uint64, int);
 int             mappages(pagetable_t, uint64, uint64, uint64, int);
 pagetable_t     uvmcreate(void);
 void            uvminit(pagetable_t, uchar *, uint);
 uint64          uvmalloc(pagetable_t, uint64, uint64);
 uint64          uvmdealloc(pagetable_t, uint64, uint64);
-int             copyin(pagetable_t, char *, uint64, uint64);
-int             copyinstr(pagetable_t, char *, uint64, uint64);
-void            vmprint(pagetable_t);
-// lab3-1
-void vmprint(pagetable_t);
-// 初始化kernel页表 lab3-2
-pagetable_t _kvminit();
-// 映射
-void _kvmmap(pagetable_t, uint64, uint64, uint64, int);
-// vm.c的walk函数
-pte_t* walk(pagetable_t, uint64, int);
-// lab3-3
-int copyin_new(pagetable_t, char*, uint64, uint64);
-int copyinstr_new(pagetable_t, char*, uint64, uint64);
-void uvm2kvm(pagetable_t, pagetable_t, uint64, uint64);
-
-
 #ifdef SOL_COW
 #else
 int             uvmcopy(pagetable_t, pagetable_t, uint64);
@@ -195,6 +180,13 @@ uint64          walkaddr(pagetable_t, uint64);
 int             copyout(pagetable_t, uint64, char *, uint64);
 int             copyin(pagetable_t, char *, uint64, uint64);
 int             copyinstr(pagetable_t, char *, uint64, uint64);
+void            vmprint(pagetable_t);
+void            kvmfree(pagetable_t);
+int             uvm2k(pagetable_t, pagetable_t, uint64, uint64);
+
+//vmcopyin.c
+int             copyin_new(pagetable_t, char *, uint64, uint64);
+int             copyinstr_new(pagetable_t, char *, uint64, uint64);
 
 // plic.c
 void            plicinit(void);
@@ -240,3 +232,4 @@ int             sockread(struct sock *, uint64, int);
 int             sockwrite(struct sock *, uint64, int);
 void            sockrecvudp(struct mbuf*, uint32, uint16, uint16);
 #endif
+
